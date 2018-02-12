@@ -1,6 +1,6 @@
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open('wittr-static-v1')
+    caches.open('wittr-static-v2')
       .then(cache => {
         cache.addAll([
           '/',
@@ -12,6 +12,11 @@ self.addEventListener('install', event => {
         ])
       })
   )
+})
+
+self.addEventListener('activate', () => {
+  caches.delete('wittr-static-v1')
+    .then(result => console.log('cache deleted:', result))
 })
 
 self.addEventListener('fetch', event => {
