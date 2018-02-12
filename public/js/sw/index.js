@@ -1,7 +1,9 @@
 self.addEventListener('fetch', function(event) {
-  event.respondWith(
-    new Response('<b class="a-winner-is-me">Hello, world!</b>', {
-      headers: { 'Content-Type': 'text/html' } 
-    })
-  )
+  if (!event || !event.request || ! event.request.url) return
+
+  if (String(event.request.url).match(/(.jpg)$/)) {
+    event.respondWith(
+      fetch('/imgs/dr-evil.gif')
+    )
+  }
 });
