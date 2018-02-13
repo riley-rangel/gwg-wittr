@@ -15,8 +15,37 @@ IndexController.prototype._registerServiceWorker = function() {
   if (!navigator.serviceWorker) return
 
   navigator.serviceWorker.register('/sw.js')
-    .then(reg => console.log('sw registered successfully!'))
+    .then(reg => {
+      if (!navigator.serviceWorker.controller) return
+
+      if (reg.waiting) {
+        this._updateReady()
+      }
+
+      if (reg.installing) {
+        reg.installing.addEventListener('statechange', () => {
+          if (this.state === 'installed') {
+            this._updateReady()
+          }
+        })
+      }
+
+      reg.addEventListener('updatefound', () => {
+        reg.installing.addEventListener('statechange', () => {
+          if (this.state === 'installed') {
+            this._updateReady()
+          }
+        })
+      })
+    })
     .catch(err => console.error('sw registration error:', err))
+
+};
+
+IndexController.prototype._updateReady = function() {
+  var toast = this._toastsView.show("New version available", {
+    buttons: ['whatever']
+  });
 };
 
 // open a connection to the server for live updates
