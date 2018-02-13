@@ -1,6 +1,8 @@
+const currentCache = 'wittr-static-v3'
+
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open('wittr-static-v2')
+    caches.open(currentCache)
       .then(cache => {
         cache.addAll([
           '/',
@@ -15,8 +17,16 @@ self.addEventListener('install', event => {
 })
 
 self.addEventListener('activate', () => {
-  caches.delete('wittr-static-v1')
-    .then(result => console.log('cache deleted:', result))
+  caches.keys()
+    .then(cacheNames => {
+      Promise.all(
+        cacheNames.filter(name => {
+          return name.startsWith('wittr-static-') && 
+            name !== currentCache
+        })
+        .map(cacheName => caches.delete(cacheName))
+      )
+    })
 })
 
 self.addEventListener('fetch', event => {
