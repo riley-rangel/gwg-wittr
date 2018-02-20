@@ -21,7 +21,7 @@ IndexController.prototype._registerServiceWorker = function() {
       if (!navigator.serviceWorker.controller) return
 
       if (reg.waiting) {
-        indexController._updateReady()
+        indexController._updateReady(reg.waiting)
       }
 
       if (reg.installing) {
@@ -37,14 +37,24 @@ IndexController.prototype._registerServiceWorker = function() {
     .catch(function(err) {
       console.error('sw registration error:', err)
     })
+
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      window.location.reload(false)
+    })
 };
 
-IndexController.prototype._updateReady = function() {
+IndexController.prototype._updateReady = function(worker) {
   const indexController = this
 
-  var toast = this._toastsView.show("New version available", {
-    buttons: ['whatever']
+  var toast = indexController._toastsView.show("New version available", {
+    buttons: ['refresh', 'dismiss'],
   });
+
+  toast.answer
+    .then(function(answer) {
+      if (answer !== 'refresh') return
+      worker.postMessage({ skipWaiting: true })
+    })
 };
 
 IndexController.prototype._listenInstalling = function(worker) {
@@ -52,7 +62,7 @@ IndexController.prototype._listenInstalling = function(worker) {
 
   worker.addEventListener('statechange', function() {
     if (worker.state === 'installed') {
-      indexController._updateReady()
+      indexController._updateReady(worker)
     }
   })
 }

@@ -35,3 +35,9 @@ self.addEventListener('fetch', event => {
       .then(res => res ? res : fetch(event.request))
   )
 });
+
+self.addEventListener('message', function(message) {
+  if (message && message.data.skipWaiting) {
+    self.skipWaiting()
+  }
+})
