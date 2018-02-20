@@ -1,11 +1,11 @@
-const currentCache = 'wittr-static-v3'
+const currentCache = 'wittr-static-v4'
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(currentCache)
       .then(cache => {
         cache.addAll([
-          '/',
+          '/skeleton',
           'js/main.js',
           'css/main.css',
           'imgs/icon.png',
@@ -30,14 +30,23 @@ self.addEventListener('activate', () => {
 })
 
 self.addEventListener('fetch', event => {
+  const requestUrl = new URL(event.request.url)
+
+  if (requestUrl.origin === location.origin) {
+    if (requestUrl.pathname === '/') {
+      event.respondWith(caches.match('/skeleton'))
+      return
+    }
+  }
+
   event.respondWith(
-    caches.match(event.request)
+    caches.match(request)
       .then(res => res ? res : fetch(event.request))
   )
 });
 
-self.addEventListener('message', function(message) {
-  if (message && message.data.skipWaiting) {
+self.addEventListener('message', function(event) {
+  if (event && event.data.skipWaiting) {
     self.skipWaiting()
   }
 })
