@@ -8,6 +8,63 @@ export default function IndexController(container) {
   this._toastsView = new ToastsView(this._container);
   this._lostConnectionToast = null;
   this._openSocket();
+  this._registerServiceWorker();
+}
+
+IndexController.prototype._registerServiceWorker = function() {
+  const indexController = this
+
+  if (!navigator.serviceWorker) return
+
+  navigator.serviceWorker.register('/sw.js')
+    .then(function(reg) {
+      if (!navigator.serviceWorker.controller) return
+
+      if (reg.waiting) {
+        indexController._updateReady(reg.waiting)
+      }
+
+      if (reg.installing) {
+        indexController._listenInstalling(reg.installing)
+        return
+      }
+
+      reg.addEventListener('updatefound', function() {
+        indexController._listenInstalling(reg.installing)
+        return
+      })
+    })
+    .catch(function(err) {
+      console.error('sw registration error:', err)
+    })
+
+    navigator.serviceWorker.addEventListener('controllerchange', function() {
+      window.location.reload(false)
+    })
+};
+
+IndexController.prototype._updateReady = function(worker) {
+  const indexController = this
+
+  var toast = indexController._toastsView.show("New version available", {
+    buttons: ['refresh', 'dismiss'],
+  });
+
+  toast.answer
+    .then(function(answer) {
+      if (answer !== 'refresh') return
+      worker.postMessage({ skipWaiting: true })
+    })
+};
+
+IndexController.prototype._listenInstalling = function(worker) {
+  const indexController = this
+
+  worker.addEventListener('statechange', function() {
+    if (worker.state === 'installed') {
+      indexController._updateReady(worker)
+    }
+  })
 }
 
 // open a connection to the server for live updates
