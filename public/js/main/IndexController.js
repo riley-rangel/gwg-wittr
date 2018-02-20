@@ -12,41 +12,50 @@ export default function IndexController(container) {
 }
 
 IndexController.prototype._registerServiceWorker = function() {
+  const indexController = this
+
   if (!navigator.serviceWorker) return
 
   navigator.serviceWorker.register('/sw.js')
-    .then(reg => {
+    .then(function(reg) {
       if (!navigator.serviceWorker.controller) return
 
       if (reg.waiting) {
-        this._updateReady()
+        indexController._updateReady()
       }
 
       if (reg.installing) {
-        reg.installing.addEventListener('statechange', () => {
-          if (this.state === 'installed') {
-            this._updateReady()
-          }
-        })
+        indexController._listenInstalling(reg.installing)
+        return
       }
 
-      reg.addEventListener('updatefound', () => {
-        reg.installing.addEventListener('statechange', () => {
-          if (this.state === 'installed') {
-            this._updateReady()
-          }
-        })
+      reg.addEventListener('updatefound', function() {
+        indexController._listenInstalling(reg.installing)
+        return
       })
     })
-    .catch(err => console.error('sw registration error:', err))
-
+    .catch(function(err) {
+      console.error('sw registration error:', err)
+    })
 };
 
 IndexController.prototype._updateReady = function() {
+  const indexController = this
+
   var toast = this._toastsView.show("New version available", {
     buttons: ['whatever']
   });
 };
+
+IndexController.prototype._listenInstalling = function(worker) {
+  const indexController = this
+
+  worker.addEventListener('statechange', function() {
+    if (worker.state === 'installed') {
+      indexController._updateReady()
+    }
+  })
+}
 
 // open a connection to the server for live updates
 IndexController.prototype._openSocket = function() {
