@@ -18,9 +18,13 @@ export default function IndexController(container) {
   this._postsView = new PostsView(this._container);
   this._toastsView = new ToastsView(this._container);
   this._lostConnectionToast = null;
-  this._openSocket();
   this._registerServiceWorker();
   this._dbPromise = openDatabase()
+
+  const indexController = this
+
+  this._showCachedMessages()
+    .then(() => indexController._openSocket())
 }
 
 IndexController.prototype._registerServiceWorker = function() {
@@ -143,3 +147,31 @@ IndexController.prototype._onSocketMessage = function(data) {
 
   this._postsView.addPosts(messages);
 };
+
+IndexController.prototype._showCachedMessages = function() {
+  const indexController = this
+
+  return this._dbPromise
+    .then(function(db) {
+      if (!db || indexController._postsView.showingPosts()) return
+
+      const messages = db.transaction('wittrs', 'readonly')
+        .objectStore('wittrs')
+        .index('by-date')
+        .getAll()
+
+      return messages
+    })
+    .then(messages => {
+      if (messages && Array.isArray(messages)) {
+
+        const sortedMsgs = messages.sort((a, b) => {
+          const aTime = +new Date(a.time)
+          const bTime = +new Date(b.time)
+          return bTime - aTime
+        })
+
+        indexController._postsView.addPosts(sortedMsgs)
+      }
+    })
+}

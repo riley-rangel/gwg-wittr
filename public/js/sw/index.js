@@ -1,4 +1,4 @@
-const currentCache = 'wittr-static-v4'
+const currentCache = 'wittr-static-v5'
 
 self.addEventListener('install', event => {
   event.waitUntil(
