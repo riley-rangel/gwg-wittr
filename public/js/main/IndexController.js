@@ -141,9 +141,15 @@ IndexController.prototype._onSocketMessage = function(data) {
       const tx = db.transaction('wittrs', 'readwrite')
       const wittrsStore = tx.objectStore('wittrs')
       messages.map(message => wittrsStore.put(message))
-      return tx.complete
+      return wittrsStore.index('by-date')
+        .openCursor(null, 'prev')
     })
-    .then(() => console.log('Message added.'))
+    .then(cursor => cursor.advance(30))
+    .then(function deletePost(cursor) {
+      if (!cursor) return
+      cursor.delete()
+      return cursor.continue().then(deletePost)
+    })
 
   this._postsView.addPosts(messages);
 };

@@ -77,8 +77,8 @@ dbPromise
       .index('age')
       .openCursor()
   })
-    .then(function logPerson(cursor) {
-      if (!cursor) return
-      console.log('Cursor at:', cursor.value.name)
-      return cursor.continue().then(logPerson)
-    })
+  .then(function logPerson(cursor) {
+    if (!cursor) return
+    console.log('Cursor at:', cursor.value.name)
+    return cursor.continue().then(logPerson)
+  })
