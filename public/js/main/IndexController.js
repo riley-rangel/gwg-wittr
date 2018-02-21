@@ -2,6 +2,17 @@ import PostsView from './views/Posts';
 import ToastsView from './views/Toasts';
 import idb from 'idb';
 
+function openDatabase() {
+  if (!navigator.serviceWorker) {
+    return Promise.resolve()
+  }
+
+  return idb.open('wittr', 1, upgradeDb => {
+    upgradeDb.createObjectStore('wittrs', { keyPath: 'id' })
+    upgradeDb.transaction.objectStore('wittrs').createIndex('by-date', 'time')
+  })
+}
+
 export default function IndexController(container) {
   this._container = container;
   this._postsView = new PostsView(this._container);
@@ -9,6 +20,7 @@ export default function IndexController(container) {
   this._lostConnectionToast = null;
   this._openSocket();
   this._registerServiceWorker();
+  this._dbPromise = openDatabase()
 }
 
 IndexController.prototype._registerServiceWorker = function() {
@@ -38,8 +50,11 @@ IndexController.prototype._registerServiceWorker = function() {
       console.error('sw registration error:', err)
     })
 
-    navigator.serviceWorker.addEventListener('controllerchange', function() {
-      window.location.reload(false)
+    let refreshing = false
+    navigator.serviceWorker.addEventListener('controllerchange', function(event) {
+      if (refreshing) return
+      window.location.reload()
+      refreshing = true
     })
 };
 
@@ -115,5 +130,16 @@ IndexController.prototype._openSocket = function() {
 // called when the web socket sends message data
 IndexController.prototype._onSocketMessage = function(data) {
   var messages = JSON.parse(data);
+
+  this._dbPromise
+    .then(db => {
+      if (!db) return
+      const tx = db.transaction('wittrs', 'readwrite')
+      const wittrsStore = tx.objectStore('wittrs')
+      messages.map(message => wittrsStore.put(message))
+      return tx.complete
+    })
+    .then(() => console.log('Message added.'))
+
   this._postsView.addPosts(messages);
 };
