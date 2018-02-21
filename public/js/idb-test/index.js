@@ -69,3 +69,16 @@ dbPromise
     return tx.complete
   })
     .then(() => console.log('People added successfully.'))
+
+dbPromise
+  .then(db => {
+    return db.transaction('people', 'readonly')
+      .objectStore('people')
+      .index('age')
+      .openCursor()
+  })
+    .then(function logPerson(cursor) {
+      if (!cursor) return
+      console.log('Cursor at:', cursor.value.name)
+      return cursor.continue().then(logPerson)
+    })
