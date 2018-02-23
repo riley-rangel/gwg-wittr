@@ -7,9 +7,14 @@ function openDatabase() {
     return Promise.resolve()
   }
 
-  return idb.open('wittr', 1, upgradeDb => {
-    upgradeDb.createObjectStore('wittrs', { keyPath: 'id' })
-    upgradeDb.transaction.objectStore('wittrs').createIndex('by-date', 'time')
+  return idb.open('wittr', 2, upgradeDb => {
+    switch(upgradeDb.oldVersion) {
+      case 0:
+        upgradeDb.createObjectStore('wittrs', { keyPath: 'id' })
+        upgradeDb.transaction.objectStore('wittrs').createIndex('by-date', 'time')
+      case 1:
+        upgradeDb.transaction.objectStore('wittrs').createIndex('by-photo', 'photo')
+    }
   })
 }
 
@@ -18,10 +23,13 @@ export default function IndexController(container) {
   this._postsView = new PostsView(this._container);
   this._toastsView = new ToastsView(this._container);
   this._lostConnectionToast = null;
-  this._registerServiceWorker();
   this._dbPromise = openDatabase()
+  this._registerServiceWorker();
+  this._cleanImageCache()
 
   const indexController = this
+
+  setInterval(() => this._cleanImageCache(), 1000 * 60 * 5)
 
   this._showCachedMessages()
     .then(() => indexController._openSocket())
@@ -179,5 +187,36 @@ IndexController.prototype._showCachedMessages = function() {
 
         indexController._postsView.addPosts(sortedMsgs)
       }
+    })
+}
+
+IndexController.prototype._cleanImageCache = function() {
+  this._dbPromise
+    .then(db => {
+      if (!db) return
+
+      return db.transaction('wittrs', 'readonly')
+        .objectStore('wittrs')
+        .index('by-photo')
+        .getAll()
+    })
+    .then(withPhotos => {
+      const photoUrls = withPhotos.map(obj => {
+        return obj.photo.replace(/-\d+px\.jpg$/, '')
+      })
+
+      caches.open('wittr-content-imgs')
+        .then(cache => {
+          cache.keys()
+            .then(keys => {
+              keys.forEach(key => {
+                const keyUrl = new URL(key.url)
+                const keyPath = keyUrl.pathname.replace(/-\d+px\.jpg$/, '')
+                if (!photoUrls.includes(keyPath)) {
+                  cache.delete(key)
+                }
+              })
+            })
+        })
     })
 }
