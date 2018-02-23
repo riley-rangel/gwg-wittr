@@ -70,22 +70,14 @@ function serveAvatar(request) {
   return caches.open(contentImgsCache)
     .then(cache => {
       return cache.match(storageUrl)
-        .then(avatar => {
-          if (avatar) {
-            fetch(request)
-              .then(res => {
-                cache.put(storageUrl, res)
-              })
+        .then(cacheAvatar => {
+          const fromNetwork = fetch(request)
+            .then(res => {
+              cache.put(storageUrl, res.clone())
+              return res
+            })
 
-            return avatar
-          }
-          else {
-            return fetch(request)
-              .then(res => {
-                cache.put(storageUrl, res.clone())
-                return res
-              })
-          }
+          return cacheAvatar || fromNetwork
         })
     })
 }
