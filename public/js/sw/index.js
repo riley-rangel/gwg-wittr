@@ -63,13 +63,14 @@ self.addEventListener('message', function(event) {
 function servePhoto(request) {
   const storageUrl = request.url.replace(/-\d+px\.jpg$/, '')
 
-  return caches.match(storageUrl)
-    .then(photo => {
-      if (photo) return photo
-      return fetch(request)
-        .then(res => {
-          return caches.open(contentImgsCache)
-            .then(cache => {
+  return caches.open(contentImgsCache)
+    .then(cache => {
+      return cache.match(storageUrl)
+        .then(photo => {
+          if (photo) return photo
+
+          return fetch(request)
+            .then(res => {
               cache.put(storageUrl, res.clone())
               return res
             })
