@@ -1,8 +1,13 @@
-const currentCache = 'wittr-static-v4'
+const staticCache = 'wittr-static-v6'
+const contentImgsCache = 'wittr-content-imgs'
+const allCaches = [
+  staticCache,
+  contentImgsCache
+]
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(currentCache)
+    caches.open(staticCache)
       .then(cache => {
         cache.addAll([
           '/skeleton',
@@ -21,8 +26,8 @@ self.addEventListener('activate', () => {
     .then(cacheNames => {
       Promise.all(
         cacheNames.filter(name => {
-          return name.startsWith('wittr-static-') && 
-            name !== currentCache
+          return name.startsWith('wittr-') && 
+            !allCaches.includes(name)
         })
         .map(cacheName => caches.delete(cacheName))
       )
@@ -37,10 +42,18 @@ self.addEventListener('fetch', event => {
       event.respondWith(caches.match('/skeleton'))
       return
     }
+    if (requestUrl.pathname.startsWith('/photos/')) {
+      event.respondWith(servePhoto(event.request))
+      return
+    }
+    if (requestUrl.pathname.startsWith('/avatars/')) {
+      event.respondWith(serveAvatar(event.request))
+      return
+    }
   }
 
   event.respondWith(
-    caches.match(request)
+    caches.match(event.request)
       .then(res => res ? res : fetch(event.request))
   )
 });
@@ -50,3 +63,39 @@ self.addEventListener('message', function(event) {
     self.skipWaiting()
   }
 })
+
+function serveAvatar(request) {
+  const storageUrl = request.url.replace(/-\dx\.jpg$/, '')
+
+  return caches.open(contentImgsCache)
+    .then(cache => {
+      return cache.match(storageUrl)
+        .then(cacheAvatar => {
+          const fromNetwork = fetch(request)
+            .then(res => {
+              cache.put(storageUrl, res.clone())
+              return res
+            })
+
+          return cacheAvatar || fromNetwork
+        })
+    })
+}
+
+function servePhoto(request) {
+  const storageUrl = request.url.replace(/-\d+px\.jpg$/, '')
+
+  return caches.open(contentImgsCache)
+    .then(cache => {
+      return cache.match(storageUrl)
+        .then(photo => {
+          if (photo) return photo
+
+          return fetch(request)
+            .then(res => {
+              cache.put(storageUrl, res.clone())
+              return res
+            })
+        })
+    })
+}

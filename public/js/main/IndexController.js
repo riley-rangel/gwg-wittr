@@ -2,13 +2,37 @@ import PostsView from './views/Posts';
 import ToastsView from './views/Toasts';
 import idb from 'idb';
 
+function openDatabase() {
+  if (!navigator.serviceWorker) {
+    return Promise.resolve()
+  }
+
+  return idb.open('wittr', 2, upgradeDb => {
+    switch(upgradeDb.oldVersion) {
+      case 0:
+        upgradeDb.createObjectStore('wittrs', { keyPath: 'id' })
+        upgradeDb.transaction.objectStore('wittrs').createIndex('by-date', 'time')
+      case 1:
+        upgradeDb.transaction.objectStore('wittrs').createIndex('by-photo', 'photo')
+    }
+  })
+}
+
 export default function IndexController(container) {
   this._container = container;
   this._postsView = new PostsView(this._container);
   this._toastsView = new ToastsView(this._container);
   this._lostConnectionToast = null;
-  this._openSocket();
+  this._dbPromise = openDatabase()
   this._registerServiceWorker();
+  this._cleanImageCache()
+
+  const indexController = this
+
+  setInterval(() => this._cleanImageCache(), 1000 * 60 * 5)
+
+  this._showCachedMessages()
+    .then(() => indexController._openSocket())
 }
 
 IndexController.prototype._registerServiceWorker = function() {
@@ -38,8 +62,11 @@ IndexController.prototype._registerServiceWorker = function() {
       console.error('sw registration error:', err)
     })
 
-    navigator.serviceWorker.addEventListener('controllerchange', function() {
-      window.location.reload(false)
+    let refreshing = false
+    navigator.serviceWorker.addEventListener('controllerchange', function(event) {
+      if (refreshing) return
+      window.location.reload()
+      refreshing = true
     })
 };
 
@@ -115,5 +142,84 @@ IndexController.prototype._openSocket = function() {
 // called when the web socket sends message data
 IndexController.prototype._onSocketMessage = function(data) {
   var messages = JSON.parse(data);
+
+  this._dbPromise
+    .then(db => {
+      if (!db) return
+      const tx = db.transaction('wittrs', 'readwrite')
+      const wittrsStore = tx.objectStore('wittrs')
+      messages.map(message => wittrsStore.put(message))
+      return wittrsStore.index('by-date')
+        .openCursor(null, 'prev')
+    })
+    .then(cursor => cursor.advance(30))
+    .then(function deletePost(cursor) {
+      if (!cursor) return
+      cursor.delete()
+      return cursor.continue().then(deletePost)
+    })
+
   this._postsView.addPosts(messages);
 };
+
+IndexController.prototype._showCachedMessages = function() {
+  const indexController = this
+
+  return this._dbPromise
+    .then(function(db) {
+      if (!db || indexController._postsView.showingPosts()) return
+
+      const messages = db.transaction('wittrs', 'readonly')
+        .objectStore('wittrs')
+        .index('by-date')
+        .getAll()
+
+      return messages
+    })
+    .then(messages => {
+      if (messages && Array.isArray(messages)) {
+
+        const sortedMsgs = messages.sort((a, b) => {
+          const aTime = +new Date(a.time)
+          const bTime = +new Date(b.time)
+          return bTime - aTime
+        })
+
+        indexController._postsView.addPosts(sortedMsgs)
+      }
+    })
+}
+
+IndexController.prototype._cleanImageCache = function() {
+  this._dbPromise
+    .then(db => {
+      if (!db) return
+
+      const imagesNeeded = []
+
+      return db.transaction('wittrs', 'readonly')
+        .objectStore('wittrs')
+        .getAll()
+        .then(posts => {
+          posts.forEach(post => {
+            if (post.photo) {
+              imagesNeeded.push(post.photo)
+            }
+            imagesNeeded.push(post.avatar)
+          })
+
+          return caches.open('wittr-content-imgs')    
+        })
+        .then(cache => {
+          cache.keys()
+            .then(requests => {
+              requests.forEach(req => {
+                const reqUrl = new URL(req.url)
+                if (!imagesNeeded.includes(reqUrl.pathname)) {
+                  cache.delete(req)
+                }
+              })
+            })
+        })    
+    })
+}
