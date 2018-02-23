@@ -195,28 +195,30 @@ IndexController.prototype._cleanImageCache = function() {
     .then(db => {
       if (!db) return
 
+      const imagesNeeded = []
+
       return db.transaction('wittrs', 'readonly')
         .objectStore('wittrs')
-        .index('by-photo')
         .getAll()
-    })
-    .then(withPhotos => {
-      const photoUrls = withPhotos.map(obj => {
-        return obj.photo.replace(/-\d+px\.jpg$/, '')
-      })
+        .then(posts => {
+          posts.forEach(post => {
+            if (post.photo) {
+              imagesNeeded.push(post.photo)
+            }
+          })
 
-      caches.open('wittr-content-imgs')
+          return caches.open('wittr-content-imgs')    
+        })
         .then(cache => {
           cache.keys()
-            .then(keys => {
-              keys.forEach(key => {
-                const keyUrl = new URL(key.url)
-                const keyPath = keyUrl.pathname.replace(/-\d+px\.jpg$/, '')
-                if (!photoUrls.includes(keyPath)) {
-                  cache.delete(key)
+            .then(requests => {
+              requests.forEach(req => {
+                const reqUrl = new URL(req.url)
+                if (!imagesNeeded.includes(reqUrl.pathname)) {
+                  cache.delete(req)
                 }
               })
             })
-        })
+        })    
     })
 }
