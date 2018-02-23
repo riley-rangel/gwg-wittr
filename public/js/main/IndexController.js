@@ -205,6 +205,7 @@ IndexController.prototype._cleanImageCache = function() {
             if (post.photo) {
               imagesNeeded.push(post.photo)
             }
+            imagesNeeded.push(post.avatar)
           })
 
           return caches.open('wittr-content-imgs')    
