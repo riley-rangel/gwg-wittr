@@ -1,8 +1,13 @@
-const currentCache = 'wittr-static-v6'
+const staticCache = 'wittr-static-v6'
+const contentImgsCache = 'wittr-content-imgs'
+const allCaches = [
+  staticCache,
+  contentImgsCache
+]
 
 self.addEventListener('install', event => {
   event.waitUntil(
-    caches.open(currentCache)
+    caches.open(staticCache)
       .then(cache => {
         cache.addAll([
           '/skeleton',
@@ -21,8 +26,8 @@ self.addEventListener('activate', () => {
     .then(cacheNames => {
       Promise.all(
         cacheNames.filter(name => {
-          return name.startsWith('wittr-static-') && 
-            name !== currentCache
+          return name.startsWith('wittr-') && 
+            !allCaches.includes(name)
         })
         .map(cacheName => caches.delete(cacheName))
       )
@@ -35,6 +40,10 @@ self.addEventListener('fetch', event => {
   if (requestUrl.origin === location.origin) {
     if (requestUrl.pathname === '/') {
       event.respondWith(caches.match('/skeleton'))
+      return
+    }
+    if (requestUrl.pathname.startsWith('/photos/')) {
+      event.respondWith(servePhoto(event.request))
       return
     }
   }
@@ -50,3 +59,20 @@ self.addEventListener('message', function(event) {
     self.skipWaiting()
   }
 })
+
+function servePhoto(request) {
+  const storageUrl = request.url.replace(/-\d+px\.jpg$/, '')
+
+  return caches.match(storageUrl)
+    .then(photo => {
+      if (photo) return photo
+      return fetch(request)
+        .then(res => {
+          return caches.open(contentImgsCache)
+            .then(cache => {
+              cache.put(storageUrl, res.clone())
+              return res
+            })
+        })
+    })
+}
